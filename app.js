@@ -9,6 +9,7 @@ const openapi = require("express-openapi");
 const swaggerUi = require("swagger-ui-express");
 const httpProxy = require(path.resolve("bin/httpProxy."));
 const userManager = require(path.resolve("bin/user."));
+const querystring = require("querystring");
 require("./bin/authentication.");
 const { config } = require("./model/config");
 
@@ -123,28 +124,28 @@ app.use(
 
 // legacy routes
 
+function keepQuery(req, res, next) {
+    res.locals.query = req.query;
+    next();
+}
 // Home (redirect to /vocables)
-app.get("/", function (req, res, _next) {
+app.get("/", keepQuery, function (req, res, next) {
     res.redirect("vocables");
 });
 
 // Login routes
 if (config.auth !== "disabled") {
     if (config.auth == "keycloak") {
-        app.get("/login", passport.authenticate("provider", { scope: ["openid", "email", "profile"] }));
-        app.get("/login/callback", passport.authenticate("provider", { successRedirect: "/", failureRedirect: "/login" }));
+        app.get("/login", keepQuery, passport.authenticate("provider", { scope: ["openid", "email", "profile"] }));
+        app.get("/login/callback", keepQuery, passport.authenticate("provider", { successRedirect: "/", failureRedirect: "/login" }));
     } else {
-        app.get("/login", function (req, res, _next) {
-            res.render("login", { title: "souslesensVocables - Login" });
+        app.get("/login", keepQuery, function (req, res, next) {
+            const query = res.locals.query;
+            res.render("login", { title: "souslesensVocables - Login", query: querystring.stringify(query) });
         });
-        app.post(
-            "/auth/login",
-            passport.authenticate("local", {
-                successRedirect: "/vocables",
-                failureRedirect: "/login",
-                failureMessage: true,
-            })
-        );
+        app.post("/auth/login", keepQuery, function (req, res, next) {
+            passport.authenticate("local", { successRedirect: "/vocables?" + querystring.stringify(req.query), failureRedirect: "/login", failureMessage: true })(req, res, next);
+        });
     }
 } else {
     app.get("/login", function (req, res, _next) {
